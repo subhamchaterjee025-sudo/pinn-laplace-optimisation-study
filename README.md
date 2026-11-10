@@ -1,266 +1,350 @@
 # PINN Laplace Optimisation Study
-### Comparative Analysis of Adam and L-BFGS for Physics-Informed Neural Networks
+### Comparative Analysis of Adam and L-BFGS Optimisers for Physics-Informed Neural Networks
 
-![Python](https://img.shields.io/badge/Python-3.x-blue?logo=python)
-![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-ee4c2c?logo=pytorch)
-![PDE](https://img.shields.io/badge/Mathematics-Partial%20Differential%20Equations-purple)
-![Status](https://img.shields.io/badge/Status-Experimental%20Study-orange)
+---
 
-## Overview
+## Abstract
 
-This project investigates the application of **Physics-Informed Neural Networks (PINNs)** to the numerical solution of the two-dimensional Laplace equation.
+This project investigates the numerical solution of the two-dimensional Laplace equation using Physics-Informed Neural Networks (PINNs). The primary objective is to study how different optimisation algorithms influence the convergence behaviour and numerical accuracy of PINNs.
 
-The primary objective is to examine how different optimisation algorithms influence the convergence behaviour and numerical accuracy of PINNs.
+A fully connected neural network is implemented using PyTorch, with automatic differentiation employed to calculate the second-order spatial derivatives required by the governing partial differential equation.
 
-Two optimisation algorithms are investigated:
+Two optimisation algorithms, **Adam** and **Limited-memory Broyden–Fletcher–Goldfarb–Shanno (L-BFGS)**, are implemented and comparatively investigated.
 
-- **Adam:** An adaptive gradient-based optimisation algorithm.
-- **L-BFGS:** A limited-memory quasi-Newton optimisation algorithm that incorporates approximate curvature information.
+The predicted solutions are validated against an analytical solution. Their performance is examined through training convergence curves, spatial error distributions, Mean Absolute Error (MAE), Maximum Absolute Error and Relative \(L^2\) Error.
 
-The predicted solutions are validated against an analytical solution, allowing the comparison to extend beyond training loss curves to actual numerical approximation errors.
-
-The project is implemented using Python and PyTorch, with automatic differentiation used to calculate the second-order spatial derivatives required by the governing PDE.
+The study focuses on understanding the relationship between optimisation mechanisms, training dynamics and numerical approximation accuracy.
 
 ---
 
 ## 1. Mathematical Formulation
 
-The governing equation is the two-dimensional Laplace equation:
+The governing equation considered in this project is the two-dimensional Laplace equation:
 
-\[
+$$
 \boxed{
+\Delta u =
 \frac{\partial^2u}{\partial x^2}
 +
 \frac{\partial^2u}{\partial y^2}=0
 }
-\]
+$$
 
-over the computational domain:
+The computational domain is defined as:
 
-\[
-\Omega=[0,1]\times[0,1].
-\]
+$$
+\Omega=[0,1]\times[0,1]
+$$
 
 ### Boundary Conditions
 
 The following Dirichlet boundary conditions are imposed:
 
-\[
+$$
 u(0,y)=0
-\]
+$$
 
-\[
+$$
 u(1,y)=0
-\]
+$$
 
-\[
+$$
 u(x,0)=0
-\]
+$$
 
-\[
+$$
 u(x,1)=\sin(\pi x)
-\]
+$$
 
 ### Analytical Solution
 
-The exact solution for this boundary-value problem is:
+The exact analytical solution corresponding to the boundary-value problem is:
 
-\[
+$$
 \boxed{
 u(x,y)=
 \frac{\sinh(\pi y)}{\sinh(\pi)}
 \sin(\pi x)
 }
-\]
+$$
 
-This analytical expression is used as the reference solution for evaluating the accuracy of the PINN predictions.
+This analytical expression is used as the reference solution for validating the PINN predictions.
 
 ---
 
-## 2. Neural Network Architecture
+## 2. Physics-Informed Neural Network Architecture
 
 A fully connected feedforward neural network is implemented using PyTorch.
 
-**Architecture:**
+**Network architecture:**
 
-```text
-Input Layer:       2 neurons (x, y)
-Hidden Layer 1:   32 neurons + Tanh
-Hidden Layer 2:   32 neurons + Tanh
-Hidden Layer 3:   32 neurons + Tanh
-Output Layer:      1 neuron (u)
-```
+- Input layer: 2 neurons, representing spatial coordinates \((x,y)\).
+- Hidden layer 1: 32 neurons with Tanh activation.
+- Hidden layer 2: 32 neurons with Tanh activation.
+- Hidden layer 3: 32 neurons with Tanh activation.
+- Output layer: 1 neuron, representing the approximate solution \(u_\theta(x,y)\).
 
-The network approximates the solution:
+The network approximates the unknown solution through:
 
-\[
-u_\theta(x,y)
-\]
+$$
+u_\theta(x,y)\approx u(x,y)
+$$
 
-where \(\theta\) represents the trainable network parameters.
+where \(\theta\) denotes the trainable network parameters.
 
 ### Automatic Differentiation
 
-PyTorch's automatic differentiation framework is used to calculate:
+PyTorch automatic differentiation is used to calculate the spatial derivatives:
 
-\[
-u_x,\quad u_y,\quad u_{xx},\quad u_{yy}.
-\]
+$$
+u_x=\frac{\partial u_\theta}{\partial x},
+\qquad
+u_y=\frac{\partial u_\theta}{\partial y}
+$$
+
+The second-order derivatives are subsequently obtained:
+
+$$
+u_{xx}=\frac{\partial^2u_\theta}{\partial x^2},
+\qquad
+u_{yy}=\frac{\partial^2u_\theta}{\partial y^2}
+$$
 
 The PDE residual is constructed as:
 
-\[
-r_\theta(x,y)=u_{xx}+u_{yy}.
-\]
+$$
+\boxed{
+r_\theta(x,y)=u_{xx}+u_{yy}
+}
+$$
 
-This residual is incorporated into the training objective, allowing the network to learn from the governing differential equation rather than relying exclusively on labelled solution data.
+The objective is to minimise this residual throughout the interior computational domain while satisfying the prescribed boundary conditions.
 
 ---
 
 ## 3. Physics-Informed Loss Function
 
-The total loss consists of two components.
+The training objective consists of two components.
 
-### PDE Loss
+### PDE Residual Loss
 
-\[
+For \(N_i\) interior collocation points:
+
+$$
 L_{\mathrm{PDE}}=
 \frac{1}{N_i}
 \sum_{j=1}^{N_i}
 \left[
 u_{xx}(x_j,y_j)+u_{yy}(x_j,y_j)
 \right]^2
-\]
+$$
 
-### Boundary Loss
+### Boundary Condition Loss
 
-\[
+For \(N_b\) boundary points:
+
+$$
 L_{\mathrm{BC}}=
 \frac{1}{N_b}
 \sum_{j=1}^{N_b}
 \left[
 u_\theta(X_j)-U_j
 \right]^2
-\]
+$$
 
-### Total Loss
+### Total Loss Function
 
-\[
+The combined optimisation objective is:
+
+$$
 \boxed{
-L_{\mathrm{total}}
-=
-L_{\mathrm{PDE}}+10L_{\mathrm{BC}}
+L_{\mathrm{total}}=
+L_{\mathrm{PDE}}+
+\lambda_{\mathrm{BC}}L_{\mathrm{BC}}
 }
-\]
+$$
 
-The boundary loss weighting coefficient is fixed at 10 for the reported experiments.
+where the boundary loss weighting coefficient is:
+
+$$
+\lambda_{\mathrm{BC}}=10
+$$
 
 ---
 
-## 4. Dataset Configuration
+## 4. Optimisation Algorithms Investigated
 
-The training dataset consists of 10,000 points.
+The project examines two optimisation methods with fundamentally different update mechanisms.
+
+### 4.1 Adam Optimiser
+
+Adam is an adaptive gradient-based optimisation algorithm that uses exponentially weighted estimates of the first and second moments of gradients.
+
+The first moment estimate is:
+
+$$
+m_t=\beta_1m_{t-1}+(1-\beta_1)g_t
+$$
+
+The second moment estimate is:
+
+$$
+v_t=\beta_2v_{t-1}+(1-\beta_2)g_t^2
+$$
+
+After bias correction:
+
+$$
+\widehat m_t=\frac{m_t}{1-\beta_1^t}
+$$
+
+$$
+\widehat v_t=\frac{v_t}{1-\beta_2^t}
+$$
+
+The parameter update is:
+
+$$
+\boxed{
+\theta_{t+1}=
+\theta_t-
+\eta
+\frac{\widehat m_t}
+{\sqrt{\widehat v_t}+\epsilon}
+}
+$$
+
+Adam was investigated to examine how adaptive gradient scaling influences the training dynamics of a PINN.
+
+### 4.2 L-BFGS Optimiser
+
+L-BFGS is a limited-memory quasi-Newton optimisation algorithm.
+
+Unlike first-order gradient methods, quasi-Newton methods incorporate approximate curvature information into the parameter update.
+
+The Newton-type update is:
+
+$$
+\theta_{k+1}
+=
+\theta_k-H_k^{-1}\nabla L(\theta_k)
+$$
+
+where \(H_k\) represents the Hessian matrix.
+
+L-BFGS approximates inverse-Hessian information using a limited history of parameter and gradient differences, avoiding the need to store the full Hessian.
+
+Its conceptual update is:
+
+$$
+\boxed{
+\theta_{k+1}=
+\theta_k-\alpha_kB_k\nabla L(\theta_k)
+}
+$$
+
+where \(B_k\) approximates inverse-Hessian information and \(\alpha_k\) denotes the step length.
+
+A Strong-Wolfe line search is used in the implementation to determine suitable step lengths.
+
+### Why Compare These Optimisers?
+
+The comparison aims to investigate how adaptive first-order optimisation and quasi-Newton curvature-based optimisation behave when minimising a physics-informed objective involving second-order spatial derivatives.
+
+---
+
+## 5. Dataset and Experimental Configuration
+
+The training dataset consists of 10,000 points distributed between the interior domain and its boundaries.
 
 | Dataset component | Number of points |
 |---|---:|
 | Interior collocation points | 8,000 |
-| Left boundary | 500 |
-| Right boundary | 500 |
-| Bottom boundary | 500 |
-| Top boundary | 500 |
+| Left boundary points | 500 |
+| Right boundary points | 500 |
+| Bottom boundary points | 500 |
+| Top boundary points | 500 |
 | **Total** | **10,000** |
 
-Interior collocation points are used to evaluate the PDE residual, while boundary points enforce the prescribed Dirichlet conditions.
+The two optimisation experiments use the following configurations:
 
-An independent \(100\times100\) evaluation grid is used for numerical validation.
+| Parameter | Adam | L-BFGS |
+|---|---:|---:|
+| Dataset size | 10,000 | 10,000 |
+| Epochs / outer iterations | 10,000 | 10,000 |
+| Learning-rate parameter | 0.001 | 1.0 |
+| Boundary loss weight | 10 | 10 |
+| Line search | Not used | Strong Wolfe |
 
----
-
-## 5. Optimisation Algorithms
-
-### Adam
-
-Adam uses adaptive estimates of the first and second moments of gradients.
-
-Experimental configuration:
-
-| Parameter | Value |
-|---|---:|
-| Optimiser | Adam |
-| Learning rate | 0.001 |
-| Epochs | 10,000 |
-
-### L-BFGS
-
-L-BFGS is a quasi-Newton optimisation method that approximates inverse-Hessian information using a limited history of gradient and parameter updates.
-
-Experimental configuration:
-
-| Parameter | Value |
-|---|---:|
-| Optimiser | L-BFGS |
-| Learning-rate parameter | 1.0 |
-| Outer iterations | 10,000 |
-| History size | 50 |
-| Line search | Strong Wolfe |
-| Maximum internal iterations | 1 |
-
-**Note:** Adam's learning rate and L-BFGS's step-size parameter are not directly equivalent. L-BFGS also performs potentially multiple closure evaluations during line search.
+**Note:** The learning-rate parameter of Adam and the step-size parameter of L-BFGS are not directly equivalent. L-BFGS may perform multiple closure evaluations during a single outer iteration.
 
 ---
 
-## 6. Experimental Results
+## 6. Numerical Results and Visualisation
 
-### 6.1 L-BFGS: Solution and Error Distribution
+### 6.1 L-BFGS: Analytical Solution, PINN Prediction and Absolute Error
 
-The following plots compare the analytical solution, the PINN prediction and their absolute difference.
+The following visualisation compares the analytical solution with the neural-network approximation and its corresponding absolute error distribution.
 
-![L-BFGS Solution and Error](figures/lbfgs_solution_error.png)
+![L-BFGS Solution and Error](lbfgs_solution_error.png)
 
-### 6.2 Adam: Solution and Error Distribution
+### 6.2 Adam: Analytical Solution, PINN Prediction and Absolute Error
 
-![Adam Solution and Error](figures/adam_solution_error.png)
+![Adam Solution and Error](adam_solution_error.png)
 
-### 6.3 L-BFGS Convergence
+### 6.3 L-BFGS Training Convergence
 
-The L-BFGS convergence curve demonstrates rapid initial loss reduction followed by an extended plateau.
+The L-BFGS training curve exhibits rapid initial reduction in the objective function, followed by an extended plateau.
 
-![L-BFGS Training Curve](figures/lbfgs_convergence.png)
+![L-BFGS Convergence](lbfgs_convergence.png)
 
-### 6.4 Adam Convergence
+### 6.4 Adam Training Convergence
 
-Adam exhibits gradual overall loss reduction, accompanied by recurring local oscillations and spikes.
+The Adam training curve demonstrates gradual loss reduction, accompanied by recurring oscillations in the total, PDE and boundary losses.
 
-![Adam Training Curve](figures/adam_convergence.png)
+![Adam Convergence](adam_convergence.png)
 
 ---
 
-## 7. Numerical Validation
+## 7. Quantitative Validation
 
-The predicted solutions are evaluated against the analytical solution using three error metrics.
+The predicted solutions are evaluated against the analytical solution using three numerical error metrics.
 
-**Mean Absolute Error (MAE)**
+### Mean Absolute Error
 
-\[
-MAE=\frac{1}{N}\sum_{i=1}^{N}
+$$
+\boxed{
+MAE=
+\frac{1}{N}
+\sum_{i=1}^{N}
 |\hat u_i-u_i|
-\]
+}
+$$
 
-**Maximum Absolute Error**
+### Maximum Absolute Error
 
-\[
-E_{\max}=\max_i|\hat u_i-u_i|
-\]
+$$
+\boxed{
+E_{\max}=
+\max_{1\leq i\leq N}
+|\hat u_i-u_i|
+}
+$$
 
-**Relative \(L^2\) Error**
+### Relative \(L^2\) Error
 
-\[
+$$
+\boxed{
 E_{L^2}=
-\frac{\|\hat{\mathbf u}-\mathbf u\|_2}
-{\|\mathbf u\|_2}
-\]
+\frac{
+\|\hat{\mathbf u}-\mathbf u\|_2
+}{
+\|\mathbf u\|_2
+}
+}
+$$
 
-### Quantitative Comparison
+### Experimental Comparison
 
 | Validation Metric | Adam (0.001) | L-BFGS (1.0) |
 |---|---:|---:|
@@ -270,123 +354,74 @@ E_{L^2}=
 
 ### Observations
 
-The reported experiments reveal the following:
+The numerical results reveal the following:
 
-1. L-BFGS achieved approximately 43.63% lower MAE than Adam.
-2. L-BFGS achieved approximately 35.20% lower relative \(L^2\) error.
-3. Adam produced a slightly lower maximum absolute error.
+1. L-BFGS achieved approximately **43.63% lower Mean Absolute Error** compared with Adam.
+2. L-BFGS achieved approximately **35.20% lower Relative \(L^2\) Error**.
+3. Adam produced a slightly lower Maximum Absolute Error.
 4. Adam exhibited gradual convergence with recurring loss oscillations.
-5. L-BFGS demonstrated rapid initial convergence followed by an extended plateau.
+5. L-BFGS demonstrated rapid initial loss reduction followed by an extended plateau.
 
-These results suggest that L-BFGS achieved better average and relative global accuracy in the reported experiments, while Adam retained a small advantage in maximum pointwise accuracy.
+For the reported experimental configurations, L-BFGS achieved better average and relative global accuracy, whereas Adam retained a small advantage in maximum pointwise accuracy.
 
-The results are specific to the tested configurations and do not establish universal superiority of either optimiser.
+These observations are specific to the tested configurations and do not establish universal superiority of either algorithm.
 
 ---
 
-## 8. Key Questions Investigated
+## 8. Investigations and Questions Explored
 
-The project developed around several computational and mathematical questions:
+The project developed through a series of mathematical and computational investigations:
 
-- How can automatic differentiation be used to construct a second-order differential operator?
-- Why do PINN training losses exhibit oscillations during optimisation?
-- How does learning-rate selection influence convergence?
+- How can automatic differentiation construct a second-order differential operator?
+- Why do PINN loss functions exhibit recurring oscillations during optimisation?
+- How does learning-rate selection influence the stability of training?
 - Does increasing the number of collocation points necessarily improve numerical accuracy?
 - How do adaptive gradient methods differ from quasi-Newton methods?
-- Why can L-BFGS stagnate under one configuration but converge rapidly under another?
-- Why should solution error be evaluated independently of training loss?
+- Why can L-BFGS stagnate under one step-size configuration but converge rapidly under another?
+- Why must numerical solution accuracy be evaluated independently of training loss?
 
-These investigations form the basis of the comparative analysis.
+These questions motivated the successive experiments and comparative analysis.
 
 ---
 
 ## 9. Limitations and Future Work
 
-The current study is an initial numerical investigation. Several improvements remain possible:
+The current study is an initial numerical investigation based on individual experimental runs.
 
-- Repeat experiments using multiple random seeds.
-- Use identical boundary sampling and network initialisation for a controlled optimiser comparison.
-- Compare wall-clock training time and objective evaluations.
-- Investigate different collocation-point densities.
-- Study the relationship between PDE residual minimisation and solution accuracy.
-- Explore hybrid optimisation strategies combining L-BFGS and Adam.
+Potential improvements include:
+
+- Repeating experiments using multiple random seeds.
+- Using identical boundary-point distributions and network initialisation for controlled optimiser comparisons.
+- Comparing wall-clock training time and objective-function evaluations.
+- Investigating the influence of collocation-point density.
+- Examining hybrid Adam and L-BFGS optimisation strategies.
+- Extending the framework to additional elliptic partial differential equations.
 
 ---
 
 ## 10. Technologies Used
 
-- **Python:** Scientific computing and implementation.
-- **PyTorch:** Neural-network construction and automatic differentiation.
-- **NumPy:** Numerical operations.
-- **Matplotlib:** Convergence curves and contour visualisations.
-- **LaTeX:** Mathematical documentation and project reporting.
-
----
-
-## 11. Repository Structure
-
-```text
-pinn-laplace-optimisation-study/
-│
-├── figures/
-│   ├── adam_convergence.png
-│   ├── adam_solution_error.png
-│   ├── lbfgs_convergence.png
-│   └── lbfgs_solution_error.png
-│
-├── adam_pinn.py
-├── lbfgs_pinn.py
-│
-├── requirements.txt
-│
-├── report/
-│   └── main.tex
-│
-└── README.md
-```
-
-*The filenames above are suggested repository organisation. Adjust them to match the files actually committed.*
-
----
-
-## 12. Running the Project
-
-Clone the repository:
-
-```bash
-git clone https://github.com/YOUR_USERNAME/pinn-laplace-optimisation-study.git
-
-cd pinn-laplace-optimisation-study
-```
-
-Install dependencies:
-
-```bash
-pip install torch numpy matplotlib
-```
-
-Run the Adam and L-BFGS implementations separately:
-
-```bash
-python adam_pinn.py
-```
-
-```bash
-python lbfgs_pinn.py
-```
-
----
+- Python
+- PyTorch
+- NumPy
+- Matplotlib
+- Automatic Differentiation
+- LaTeX
 
 ## Conclusion
 
-This project provides a computational investigation of Physics-Informed Neural Networks for solving an elliptic partial differential equation.
+This project presents a computational investigation of Physics-Informed Neural Networks for solving a two-dimensional elliptic partial differential equation.
 
-By comparing Adam and L-BFGS, the study examines how optimisation mechanisms influence convergence behaviour and numerical approximation accuracy.
+By comparing Adam and L-BFGS, the study examines how different optimisation mechanisms influence training convergence and numerical approximation accuracy.
 
-The analytical solution provides a mathematical reference for validating the network predictions, while the loss histories and error distributions provide complementary perspectives on model performance.
+The availability of an analytical solution provides an independent mathematical reference for evaluating the network predictions. The combined analysis of convergence curves, spatial error distributions and quantitative validation metrics provides a more complete assessment than training loss alone.
 
-The overall objective is to understand the interaction between differential equations, neural-network approximation and numerical optimisation through a reproducible computational experiment.
+The project brings together concepts from **partial differential equations, automatic differentiation, numerical optimisation and scientific machine learning**.
+
+---
 
 **Author:** Subham
 
-**Project Domain:** Scientific Machine Learning · Numerical Analysis · Partial Differential Equations
+**Project:** PINN Laplace Optimisation Study
+
+**Research Areas:** Scientific Machine Learning · Numerical Analysis · Partial Differential Equations · Optimisation
